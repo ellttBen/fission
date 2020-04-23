@@ -158,7 +158,7 @@ instance MonadDNSLink Fission where
 
     update Cname baseURL gateway >>= \case
       Left err ->
-        return (Left err)
+        return $ Left err
 
       Right _ ->
         update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
