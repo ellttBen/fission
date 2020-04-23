@@ -9,6 +9,7 @@ import           Network.IPFS.CID.Types
 import           Fission.Prelude
 import           Fission.Models
 import           Fission.Ownership
+import           Fission.URL
 
 import qualified Fission.App.Retriever as App
 import           Fission.Error         as Error
@@ -48,5 +49,11 @@ updateAssociatedDNS ::
   -> Transaction m ()
 updateAssociatedDNS appId newCID = do
   appDomains <- selectList [AppDomainAppId ==. appId] []
-  forM_ appDomains \(Entity _ AppDomain {..}) ->
-    DNSLink.set appDomainDomainName appDomainSubdomain newCID
+  forM_ appDomains \(Entity _ AppDomain {..}) -> do
+    let
+      url = URL
+        { domainName = appDomainDomainName
+        , subdomain  = appDomainSubdomain
+        }
+ 
+    DNSLink.set url newCID

@@ -17,7 +17,7 @@ import qualified Fission.Platform.Heroku.ID.Types       as Heroku
 import qualified Fission.Platform.Heroku.Password.Types as Heroku
 
 import qualified Fission.AWS.Types as AWS
-import qualified Fission.URL.Types as URL
+import           Fission.URL.Types as URL
 import           Fission.Web.Types
 
 -- | The top level 'Fission' application 'RIO' configuration
@@ -43,6 +43,7 @@ data Config = Config
   , baseUserDataRootDomain :: !URL.DomainName
   , defaultDataCID         :: !CID
   , fissionDID             :: !DID
+  , liveDriveURL           :: !URL
   }
 
 instance Show Config where
@@ -68,6 +69,8 @@ instance Show Config where
     , "  baseAppDomainName      = " <> show baseAppDomainName
     , "  baseUserDataRootDomain = " <> show baseUserDataRootDomain
     , "  defaultDataCID         = " <> show defaultDataCID
+    , "  fissionDID             = " <> show fissionDID
+    , "  liveDriveURL           = " <> show liveDriveURL
     , "}"
     ]
 

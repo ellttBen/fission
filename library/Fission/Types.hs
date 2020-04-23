@@ -17,10 +17,10 @@ import           Servant.Server.Experimental.Auth
 import           Network.AWS as AWS hiding (Request)
 import           Network.AWS.Route53
 
-import           Network.IPFS               as IPFS
-import           Network.IPFS.Types         as IPFS
-import qualified Network.IPFS.Process.Error as Process
-import           Network.IPFS.Process
+import qualified Network.IPFS               as IPFS
+import qualified Network.IPFS.Types         as IPFS
+import qualified Network.IPFS.Process.Error as IPFS.Process
+import qualified Network.IPFS.Process       as IPFS
 import qualified Network.IPFS.Peer          as Peer
 
 import           Fission.Prelude
@@ -36,7 +36,7 @@ import           Fission.IPFS.DNSLink as DNSLink
 import           Fission.IPFS.Linked
 
 import           Fission.Authorization.Types
-import qualified Fission.URL as URL
+import           Fission.URL as URL
 
 import           Fission.Platform.Heroku.Types as Heroku
 
@@ -148,12 +148,13 @@ instance MonadRoute53 Fission where
           |> rrsResourceRecords ?~ pure (resourceRecord value)
 
 instance MonadDNSLink Fission where
-  set domain maySubdomain (CID hash) = do
+  set URL {..} IPFS.CID {unaddress = hash} = do
     IPFS.Gateway gateway <- asks ipfsGateway
 
     let
-      baseURL    = URL.normalizePrefix domain maySubdomain
-      dnsLinkURL = URL.prefix baseURL (URL.Subdomain "_dnslink")
+      baseURL    = URL.normalizePrefix domainName subdomain
+      sub        = maybe "" (\(URL.Subdomain txt) -> "." <> txt) subdomain
+      dnsLinkURL = URL.prefix baseURL (URL.Subdomain $ "_dnslink" <> sub)
       dnsLink    = "dnslink=/ipfs/" <> hash
 
     update Cname baseURL gateway >>= \case
@@ -164,32 +165,55 @@ instance MonadDNSLink Fission where
         update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
           <&> \_ -> Right baseURL
 
+  follow URL {..} URL { domainName = driveDomain, subdomain = driveSub } = do
+    IPFS.Gateway gateway <- asks ipfsGateway
+
+    let
+      baseURL    = URL.normalizePrefix domainName subdomain
+      sub        = maybe "" (\(URL.Subdomain txt) -> "." <> txt) subdomain
+      dnsLinkURL = URL.prefix baseURL (URL.Subdomain $ "_dnslink" <> sub)
+   
+      URL.DomainName driveURL = URL.normalizePrefix driveDomain driveSub
+      dnsLink                 = "dnslink=/ipns/" <> driveURL
+
+    update Cname baseURL gateway >>= \case
+      Left err ->
+        return $ Left err
+
+      Right _ ->
+        update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
+          <&> \_ -> Right baseURL
+
   setBase subdomain cid = do
-    domain <- asks baseAppDomainName
-    DNSLink.set domain (Just subdomain) cid
+    -- FIXME make work on fission.app
+    --       may need change to the config AND route53 zone settings
+    domainName <- asks baseAppDomainName
+    DNSLink.set URL { domainName, subdomain = (Just subdomain) } cid
 
 instance MonadLinkedIPFS Fission where
   getLinkedPeers = pure <$> asks ipfsRemotePeer
 
-instance MonadLocalIPFS Fission where
+instance IPFS.MonadLocalIPFS Fission where
   runLocal opts arg = do
     IPFS.BinPath ipfs <- asks ipfsPath
     IPFS.Timeout secs <- asks ipfsTimeout
 
-    let opts' = ("--timeout=" <> show secs <> "s") : opts
+    let
+      opts' = ("--timeout=" <> show secs <> "s") : opts
+      args' = byteStringInput arg
 
-    runProc readProcess ipfs (byteStringInput arg) byteStringOutput opts' <&> \case
+    IPFS.runProc readProcess ipfs args' byteStringOutput opts' <&> \case
       (ExitSuccess, contents, _) ->
         Right contents
 
       (ExitFailure _, _, stdErr)
         | Lazy.isSuffixOf "context deadline exceeded" stdErr ->
-            Left $ Process.Timeout secs
+            Left $ IPFS.Process.Timeout secs
  
         | otherwise ->
-            Left $ Process.UnknownErr stdErr
+            Left $ IPFS.Process.UnknownErr stdErr
 
-instance MonadRemoteIPFS Fission where
+instance IPFS.MonadRemoteIPFS Fission where
   runRemote query = do
     peerID       <- asks ipfsRemotePeer
     IPFS.URL url <- asks ipfsURL
@@ -223,7 +247,7 @@ instance App.Content.Initializer Fission where
   placeholder = asks appPlaceholder
 
 instance JWT.Resolver Fission where
-  resolve cid@(CID hash) =
+  resolve cid@(IPFS.CID hash) =
     IPFS.runLocal ["cat"] (Lazy.fromStrict $ encodeUtf8 hash) <&> \case
       Left errMsg ->
         Left $ CannotResolve cid errMsg

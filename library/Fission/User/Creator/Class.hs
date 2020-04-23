@@ -94,7 +94,7 @@ instance
       |> User.check
       |> \case
         Left err ->
-          return (Error.openLeft err)
+          return $ Error.openLeft err
 
         Right user ->
           insertUnique user >>= \case
@@ -102,9 +102,11 @@ instance
               determineConflict username (Just pk)
 
             Just userId ->
+              -- FIXME set USERNAME.fission.name to `follow` Drive
+              -- FIXME setdata should adjust _files.username.fission.name
               User.setData userId App.Content.empty now >>= \case
                 Left err ->
-                  return (Error.openLeft err)
+                  return $ Error.openLeft err
 
                 Right () ->
                   App.createWithPlaceholder userId now <&> \case
@@ -114,7 +116,7 @@ instance
   createWithPassword username password email now =
     Password.hashPassword password >>= \case
       Left err ->
-        return (Error.openLeft err)
+        return $ Error.openLeft err
 
       Right secretDigest ->
         User

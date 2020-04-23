@@ -30,6 +30,9 @@ import qualified Fission.Internal.Fixture.Key.Ed25519 as Ed25519
 
 import           Fission.Prelude
  
+import qualified Fission.Key as Key
+import           Fission.URL
+
 import           Fission.Authorization.Types
 import           Fission.Authorization.Potency.Types
 
@@ -38,7 +41,6 @@ import           Fission.IPFS.DNSLink.Class
 
 import           Fission.Models
 import           Fission.User.DID.Types
-import           Fission.URL.Types
 
 import           Fission.Web.Auth.Class
 import           Fission.Web.Client.Auth.Class
@@ -138,10 +140,10 @@ instance
   , IsMember RunAWS        effs
   )
   => MonadDNSLink (Mock effs) where
-  set d s c = do
+  set URL {..} c = do
     Effect.log SetDNSLink
     runner <- asks setDNSLink
-    return $ runner d s c
+    return $ runner domainName subdomain c
 
   setBase s c = do
     Effect.log SetDNSLink
