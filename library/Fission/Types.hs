@@ -27,8 +27,6 @@ import           Servant.Server.Experimental.Auth
 import           Network.AWS as AWS hiding (Request)
 import           Network.AWS.Route53
  
-import           Fission.Error as Error
-
 import qualified Network.IPFS               as IPFS
 import qualified Network.IPFS.Types         as IPFS
 import qualified Network.IPFS.Process.Error as IPFS.Process
@@ -38,20 +36,17 @@ import qualified Network.IPFS.Peer          as Peer
 import           Fission.Prelude
 import           Fission.Config.Types
 import           Fission.Models
-
-import qualified Fission.App.Domain   as App.Domain
-import           Fission.AWS       as AWS
-import           Fission.AWS.Types as AWS
+import           Fission.Error as Error
 
 import           Fission.Web.Types
 import qualified Fission.Web.Error as Web.Error
 import qualified Fission.App.Creator as App
 
-import           Fission.IPFS.DNSLink as DNSLink
 import           Fission.IPFS.Linked
 
 import           Fission.Authorization.Types
 import           Fission.URL as URL
+import           Fission.AWS as AWS
 
 import           Fission.Platform.Heroku.Types as Heroku
 
@@ -61,12 +56,9 @@ import qualified Fission.Web.Auth.Token as Auth.Token
 
 import           Fission.Web.Server.Reflective as Reflective
 import           Fission.Web.Handler
- 
-import qualified Fission.User.Validation    as User
 
 import           Fission.User.DID.Types
 import qualified Fission.User          as User
-import qualified Fission.User.Password as Password
 
 import           Fission.Web.Auth.Token.Basic.Class
 import           Fission.Web.Auth.Token.JWT.Resolver as JWT
@@ -200,14 +192,7 @@ instance MonadDNSLink Fission where
         return $ Left err
 
       Right _ ->
-        AWS.update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
-          <&> \_ -> Right ()
-
-  -- setBase subdomain cid = do
-  --   -- FIXME make work on fission.app
-  --   --       may need change to the config AND route53 zone settings
-  --   domainName <- asks baseAppDomainName
-  --   DNSLink.set URL { domainName, subdomain = (Just subdomain) } cid
+        AWS.update Txt dnsLinkURL ("\"" <> dnsLink <> "\"") <&> \_ -> Right ()
 
 instance MonadLinkedIPFS Fission where
   getLinkedPeers = pure <$> asks ipfsRemotePeer

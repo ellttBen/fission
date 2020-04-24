@@ -17,20 +17,13 @@ import qualified Fission.Platform.Heroku.Region.Types  as Heroku
 import qualified Fission.Platform.Heroku.AddOn.Creator as Heroku.AddOn
 
 import qualified Fission.User.Creator.Error as User
-import           Fission.User.Modifier      as User
 import           Fission.User.Password      as Password
 import           Fission.User.Types
 import qualified Fission.User.Username      as Username
 import qualified Fission.User.Validation    as User
 
 import qualified Fission.App.Domain  as AppDomain
-import qualified Fission.App.Creator as App
-
-import           Fission.IPFS.DNSLink
-import           Fission.URL.Subdomain.Types
-
 import qualified Fission.App.Content as App.Content
-import qualified Fission.App.Domain  as App.Domain
 
 type Errors = OpenUnion
   '[ ActionNotAuthorized App

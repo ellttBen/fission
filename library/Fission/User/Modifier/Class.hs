@@ -1,5 +1,6 @@
 module Fission.User.Modifier.Class (Modifier (..)) where
 
+import           Database.Persist as Persist
 import           Network.IPFS.CID.Types
 import           Servant
 
@@ -8,17 +9,7 @@ import           Fission.Prelude
 import           Fission.Key           as Key
 import           Fission.Models
 import           Fission.User.Password as Password
-
-
-
- 
-
-import qualified Data.Aeson as JSON
-import           Fission.URL
-import           Fission.IPFS.DNSLink as DNSLink
-import           Fission.User.Username.Types
-
-import           Database.Persist as Persist
+import           Fission.IPFS.DNSLink  as DNSLink
 
 class Monad m => Modifier m where
   updatePassword ::
@@ -75,13 +66,3 @@ instance (MonadDNSLink m, MonadIO m) => Modifier (Transaction m) where
 
     return ok
 
-   -- FIXME MOVE TO FISSION
-    -- let
-    --   url = URL
-    --     { domainName = undefined -- FIXME lookup fission.name
-    --     , subdomain  = Just . Subdomain $ "_files." <> username
-    --     }
-
-    -- DNSLink.set url newCID <&> \case
-    --   Left err -> Left err
-    --   Right _  -> ok
