@@ -154,7 +154,7 @@ instance IsMember RunLocalIPFS effs => MonadLocalIPFS (Mock effs) where
     asks localIPFSCall
 
 instance IsMember RunRemoteIPFS effs => MonadRemoteIPFS (Mock effs) where
-  runRemote = undefined
+  runRemote = undefined -- FIXME
 
   ipfsAdd bs = do
     Effect.log $ RemoteIPFSAdd bs
@@ -221,7 +221,7 @@ instance
   create _ _ _ _ = do
     Effect.log CreateUser
     Effect.log UpdateRoute53
-    return $ Right (Database.toSqlKey 0, Subdomain "new-subdomain")
+    return . Right $ Database.toSqlKey 0
 
   createWithPassword _ _ _ _ = do
     Effect.log CreateUser

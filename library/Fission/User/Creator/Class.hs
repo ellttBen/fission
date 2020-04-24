@@ -53,7 +53,7 @@ class Heroku.AddOn.Creator m => Creator m where
     -> Key.Public
     -> Email
     -> UTCTime
-    -> m (Either Errors (UserId, Subdomain))
+    -> m (Either Errors UserId)
 
   createWithPassword ::
        Username

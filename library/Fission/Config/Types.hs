@@ -38,10 +38,13 @@ data Config = Config
   , awsSecretKey           :: !AWS.SecretKey
   , awsZoneID              :: !AWS.ZoneID
   , awsRoute53MockEnabled  :: !AWS.Route53MockEnabled
+  --
   , appPlaceholder         :: !CID
   , baseAppDomainName      :: !URL.DomainName
+  --
   , baseUserDataRootDomain :: !URL.DomainName
   , defaultDataCID         :: !CID
+  --
   , fissionDID             :: !DID
   , liveDriveURL           :: !URL
   }

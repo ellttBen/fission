@@ -25,25 +25,27 @@ type Errors = OpenUnion
 class Monad m => Creator m where
   create :: UserId -> CID -> UTCTime -> m (Either Errors (AppId, Subdomain))
 
-instance
-  ( App.Domain.Initializer m
-  , MonadDNSLink m
-  )
-  => Creator (Transaction m) where
-  create ownerId cid now = do
-    appId <- insert App
-      { appOwnerId    = ownerId
-      , appCid        = cid
-      , appInsertedAt = now
-      , appModifiedAt = now
-      }
+-- instance
+--   ( App.Domain.Initializer m
+--   , MonadDNSLink m
+--   )
+--   => Creator (Transaction m) where
+--   create ownerId cid now = do
+--     appId <- insert App
+--       { appOwnerId    = ownerId
+--       , appCid        = cid
+--       , appInsertedAt = now
+--       , appModifiedAt = now
+--       }
 
-    App.Domain.associateDefault ownerId appId now >>= \case
-      Left err ->
-        return $ Error.relaxedLeft err
+    -- App.Domain.associateDefault ownerId appId now >>= \case
+    --   Left err ->
+    --     return $ Error.relaxedLeft err
 
-      Right subdomain -> do
-        domainName <- App.Domain.initial
-        DNSLink.set URL { domainName, subdomain = Just subdomain } cid <&> \case
-          Left  err -> Error.openLeft err
-          Right _   -> Right (appId, subdomain)
+    --   Right subdomain -> do
+    --     domainName <- App.Domain.initial
+    --     driveURL   <- asks liveDriveURL
+
+    --     DNSLink.follow URL { domainName, subdomain = Just subdomain } driveURL <&> \case
+    --       Left  err -> Error.openLeft err
+    --       Right _   -> Right (appId, subdomain)

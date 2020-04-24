@@ -12,15 +12,22 @@ import           Database.Persist as Persist
 
 import           Control.Monad.Catch
 import qualified Database.Persist.Sql as SQL
+import qualified Fission.App as App
+
+import Servant.Server
 
 import qualified RIO.ByteString.Lazy as Lazy
 import qualified RIO.Text            as Text
+
+import qualified Fission.Platform.Heroku.AddOn.Creator as Heroku.AddOn
 
 import           Servant.Client
 import           Servant.Server.Experimental.Auth
 
 import           Network.AWS as AWS hiding (Request)
 import           Network.AWS.Route53
+ 
+import           Fission.Error as Error
 
 import qualified Network.IPFS               as IPFS
 import qualified Network.IPFS.Types         as IPFS
@@ -32,11 +39,13 @@ import           Fission.Prelude
 import           Fission.Config.Types
 import           Fission.Models
 
+import qualified Fission.App.Domain   as App.Domain
 import           Fission.AWS       as AWS
 import           Fission.AWS.Types as AWS
 
 import           Fission.Web.Types
 import qualified Fission.Web.Error as Web.Error
+import qualified Fission.App.Creator as App
 
 import           Fission.IPFS.DNSLink as DNSLink
 import           Fission.IPFS.Linked
@@ -52,6 +61,8 @@ import qualified Fission.Web.Auth.Token as Auth.Token
 
 import           Fission.Web.Server.Reflective as Reflective
 import           Fission.Web.Handler
+ 
+import qualified Fission.User.Validation    as User
 
 import           Fission.User.DID.Types
 import qualified Fission.User          as User
@@ -190,7 +201,7 @@ instance MonadDNSLink Fission where
 
       Right _ ->
         AWS.update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
-          <&> \_ -> Right baseURL
+          <&> \_ -> Right ()
 
   -- setBase subdomain cid = do
   --   -- FIXME make work on fission.app
@@ -320,15 +331,81 @@ instance User.Modifier Fission where
       Right () -> do
         runDB (Persist.get userId) >>= \case
           Nothing ->
-            undefined
+            return $ Left err404 -- FIXME just NotFound @User
            
           Just User { userUsername = Username username } -> do
+            userDataDomain <- asks baseUserDataRootDomain
+           
             let
               url = URL
-                { domainName = undefined -- FIXME lookup fission.name
+                { domainName = userDataDomain
                 , subdomain  = Just . Subdomain $ "_files." <> username
                 }
 
             DNSLink.set url newCID <&> \case
               Left err -> Left err
               Right _  -> ok
+
+instance App.Creator Fission where
+  create ownerId cid now = do
+    appId <- runDB $ insert App
+      { appOwnerId    = ownerId
+      , appCid        = cid
+      , appInsertedAt = now
+      , appModifiedAt = now
+      }
+
+    runDB (App.Domain.associateDefault ownerId appId now) >>= \case
+      Left err ->
+        return $ Error.relaxedLeft err
+
+      Right subdomain -> do
+        domainName <- App.Domain.initial
+        driveURL   <- asks liveDriveURL
+
+        DNSLink.follow URL { domainName, subdomain = Just subdomain } driveURL <&> \case
+          Left  err -> Error.openLeft err
+          Right _   -> Right (appId, subdomain)
+
+instance Heroku.AddOn.Creator Fission where
+  create uuid region now = runDB $ Heroku.AddOn.create uuid region now
+
+instance User.Creator Fission where
+  create username pk algo email now = do
+    runDB (User.create username pk algo email now) >>= \case
+      Left err ->
+        return $ Left err
+
+      Right userId -> do
+        -- FIXME set USERNAME.fission.name to `follow` Drive
+        let
+          userURL  = undefined -- FIXME
+          driveURL = undefined -- FIXME
+         
+        DNSLink.follow userURL driveURL >>= \case
+          Left serverError ->
+            return $ Error.openLeft serverError
+
+          Right () ->
+            User.setData userId App.Content.empty now >>= \case
+              Left err ->
+                return $ Error.openLeft err
+
+              Right () ->
+                App.createWithPlaceholder userId now <&> \case
+                  Left err     -> Error.relaxedLeft err
+                  Right (_, _) -> Right userId
+ 
+  createWithHeroku herokuUUID herokuRegion username password now =
+    runDB $ User.createWithHeroku herokuUUID herokuRegion username password now
+
+  createWithPassword username password email now =
+    runDB (User.createWithPassword username password email now) >>= \case
+      Left err ->
+        return $ Left err
+
+      Right userId ->
+        App.createWithPlaceholder userId now <&> \case
+          Left err -> Error.relaxedLeft err
+          Right _  -> Right userId
+
