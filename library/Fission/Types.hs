@@ -324,7 +324,7 @@ instance User.Modifier Fission where
             let
               url = URL
                 { domainName = userDataDomain
-                , subdomain  = Just . Subdomain $ "_files." <> username
+                , subdomain  = Just . Subdomain $ "_dnslink.files." <> username
                 }
 
             DNSLink.set url newCID <&> \case
