@@ -4,6 +4,11 @@ module Fission.Types
   ) where
 
 import qualified Data.Aeson as JSON
+import           Fission.URL
+import           Fission.IPFS.DNSLink as DNSLink
+import           Fission.User.Username.Types
+ 
+import           Database.Persist as Persist
 
 import           Control.Monad.Catch
 import qualified Database.Persist.Sql as SQL
@@ -25,8 +30,9 @@ import qualified Network.IPFS.Peer          as Peer
 
 import           Fission.Prelude
 import           Fission.Config.Types
+import           Fission.Models
 
-import           Fission.AWS
+import           Fission.AWS       as AWS
 import           Fission.AWS.Types as AWS
 
 import           Fission.Web.Types
@@ -48,6 +54,8 @@ import           Fission.Web.Server.Reflective as Reflective
 import           Fission.Web.Handler
 
 import           Fission.User.DID.Types
+import qualified Fission.User          as User
+import qualified Fission.User.Password as Password
 
 import           Fission.Web.Auth.Token.Basic.Class
 import           Fission.Web.Auth.Token.JWT.Resolver as JWT
@@ -157,12 +165,12 @@ instance MonadDNSLink Fission where
       dnsLinkURL = URL.prefix baseURL (URL.Subdomain $ "_dnslink" <> sub)
       dnsLink    = "dnslink=/ipfs/" <> hash
 
-    update Cname baseURL gateway >>= \case
+    AWS.update Cname baseURL gateway >>= \case
       Left err ->
         return $ Left err
 
       Right _ ->
-        update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
+        AWS.update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
           <&> \_ -> Right baseURL
 
   follow URL {..} URL { domainName = driveDomain, subdomain = driveSub } = do
@@ -176,19 +184,19 @@ instance MonadDNSLink Fission where
       URL.DomainName driveURL = URL.normalizePrefix driveDomain driveSub
       dnsLink                 = "dnslink=/ipns/" <> driveURL
 
-    update Cname baseURL gateway >>= \case
+    AWS.update Cname baseURL gateway >>= \case
       Left err ->
         return $ Left err
 
       Right _ ->
-        update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
+        AWS.update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
           <&> \_ -> Right baseURL
 
-  setBase subdomain cid = do
-    -- FIXME make work on fission.app
-    --       may need change to the config AND route53 zone settings
-    domainName <- asks baseAppDomainName
-    DNSLink.set URL { domainName, subdomain = (Just subdomain) } cid
+  -- setBase subdomain cid = do
+  --   -- FIXME make work on fission.app
+  --   --       may need change to the config AND route53 zone settings
+  --   domainName <- asks baseAppDomainName
+  --   DNSLink.set URL { domainName, subdomain = (Just subdomain) } cid
 
 instance MonadLinkedIPFS Fission where
   getLinkedPeers = pure <$> asks ipfsRemotePeer
@@ -284,7 +292,7 @@ instance PublicizeServerDID Fission where
         return ok
        
       else
-        update Txt txtRecordURL txtRecordValue <&> \case
+        AWS.update Txt txtRecordURL txtRecordValue <&> \case
           Left err ->
             Left err
 
@@ -295,3 +303,32 @@ instance PublicizeServerDID Fission where
               if status < 300
                 then ok
                 else Left $ Web.Error.toServerError status
+
+
+instance User.Modifier Fission where
+  updatePassword uID pass now =
+    runDB $ User.updatePassword uID pass now
+
+  updatePublicKey uID pk algo now =
+    runDB $ User.updatePublicKey uID pk algo now
+   
+  setData userId newCID now = do
+    runDB (User.setData userId newCID now) >>= \case
+      Left err ->
+        return $ Left err
+       
+      Right () -> do
+        runDB (Persist.get userId) >>= \case
+          Nothing ->
+            undefined
+           
+          Just User { userUsername = Username username } -> do
+            let
+              url = URL
+                { domainName = undefined -- FIXME lookup fission.name
+                , subdomain  = Just . Subdomain $ "_files." <> username
+                }
+
+            DNSLink.set url newCID <&> \case
+              Left err -> Left err
+              Right _  -> ok

@@ -17,11 +17,11 @@ import           Fission.Web.Error          as Web.Err
 import           Fission.User.Username.Types
 
 type API
-  =  Summary "Set default app's DNSLink"
-  :> Description "DEPRECATED ⛔ Set default app's DNSLink to a CID"
+  =  Summary "Set account's DNSLink"
+  :> Description "DEPRECATED ⛔ Set account's DNSLink to a CID"
   :> Capture "cid" CID
   :> PutAccepted '[PlainText, OctetStream] URL.DomainName
 
 server :: (MonadLogger m, MonadDNSLink m) => Authorization -> ServerT API m
 server Authorization {about = Entity _ User {userUsername = Username rawUN}} cid =
-  Web.Err.ensureM =<< DNSLink.setBase (URL.Subdomain rawUN) cid
+  undefined -- Web.Err.ensureM =<< DNSLink.setBase (URL.Subdomain rawUN) cid -- FIXME set to the file root I guess?

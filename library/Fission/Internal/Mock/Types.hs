@@ -145,11 +145,8 @@ instance
     runner <- asks setDNSLink
     return $ runner domainName subdomain c
 
-  setBase s c = do
-    Effect.log SetDNSLink
-    baseDomain <- asks getBaseDomain
-    runner <- asks setDNSLink
-    return $ runner baseDomain (Just s) c
+  _toSet `follow` _toFollow = do
+    undefined -- FIXME
 
 instance IsMember RunLocalIPFS effs => MonadLocalIPFS (Mock effs) where
   runLocal _ _ = do

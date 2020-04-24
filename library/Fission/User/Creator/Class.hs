@@ -74,6 +74,7 @@ class Heroku.AddOn.Creator m => Creator m where
 instance
   ( MonadIO                 m
   , MonadDNSLink            m
+  , Modifier                m
   , App.Domain.Initializer  m
   , App.Content.Initializer m
   )
