@@ -22,15 +22,18 @@ import           Fission.User.Types
 import qualified Fission.User.Username      as Username
 import qualified Fission.User.Validation    as User
 
-import qualified Fission.App.Domain  as AppDomain
+import qualified Fission.App.Domain  as App.Domain
 import qualified Fission.App.Content as App.Content
+
+import qualified Fission.User.Modifier as User
+import qualified Fission.App.Creator   as App
 
 type Errors = OpenUnion
   '[ ActionNotAuthorized App
    , NotFound            App
 
    , AlreadyExists HerokuAddOn
-   , AppDomain.AlreadyAssociated
+   , App.Domain.AlreadyAssociated
    , User.AlreadyExists
   
    , Username.Invalid
@@ -66,10 +69,9 @@ class Heroku.AddOn.Creator m => Creator m where
 
 instance
   ( MonadIO                 m
-  , MonadDNSLink            m
-  , Modifier                m
   , App.Domain.Initializer  m
   , App.Content.Initializer m
+  , App.Creator             m
   )
   => Creator (Transaction m) where
   create username pk email now =
@@ -104,8 +106,8 @@ instance
 
                 Right () ->
                   App.createWithPlaceholder userId now <&> \case
-                    Left err             -> Error.relaxedLeft err
-                    Right (_, subdomain) -> Right (userId, subdomain)
+                    Left err -> Error.relaxedLeft err
+                    Right _  -> Right userId
 
   createWithPassword username password email now =
     Password.hashPassword password >>= \case

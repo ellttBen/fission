@@ -356,8 +356,9 @@ instance Heroku.AddOn.Creator Fission where
   create uuid region now = runDB $ Heroku.AddOn.create uuid region now
 
 instance User.Creator Fission where
-  create username pk algo email now = do
-    runDB (User.create username pk algo email now) >>= \case
+  create username pk algo email now = runDB do
+    -- runDB (User.create username pk algo email now) >>= \case
+    User.create username pk algo email now >>= \case
       Left err ->
         return $ Left err
 
@@ -368,18 +369,18 @@ instance User.Creator Fission where
           driveURL = undefined -- FIXME
          
         DNSLink.follow userURL driveURL >>= \case
-          Left serverError ->
-            return $ Error.openLeft serverError
+          Left serverError -> return $ Error.openLeft serverError
+          Right _ -> return userId
 
-          Right () ->
-            User.setData userId App.Content.empty now >>= \case
-              Left err ->
-                return $ Error.openLeft err
+          -- Right () ->
+          --   User.setData userId App.Content.empty now >>= \case
+          --     Left err ->
+          --       return $ Error.openLeft err
 
-              Right () ->
-                App.createWithPlaceholder userId now <&> \case
-                  Left err     -> Error.relaxedLeft err
-                  Right (_, _) -> Right userId
+          --     Right () ->
+          --       App.createWithPlaceholder userId now <&> \case
+          --         Left err     -> Error.relaxedLeft err
+          --         Right (_, _) -> Right userId
  
   createWithHeroku herokuUUID herokuRegion username password now =
     runDB $ User.createWithHeroku herokuUUID herokuRegion username password now

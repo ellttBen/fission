@@ -11,7 +11,7 @@ import           Fission.Error as Error
 import           Fission.Models
 import           Fission.URL
 
-import qualified Fission.App.Domain   as App.Domain
+import qualified Fission.App.Domain as App.Domain
 
 type Errors = OpenUnion
   '[ ServerError

@@ -30,7 +30,7 @@ class Monad m => Modifier m where
     -> UTCTime
     -> m (Either ServerError ())
 
-instance (MonadDNSLink m, MonadIO m) => Modifier (Transaction m) where
+instance MonadIO m => Modifier (Transaction m) where
   updatePassword userId password now =
     Password.hashPassword password >>= \case
       Left err ->
