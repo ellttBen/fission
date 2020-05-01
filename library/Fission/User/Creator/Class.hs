@@ -98,8 +98,6 @@ instance
               determineConflict username (Just pk)
 
             Just userId ->
-              -- FIXME set USERNAME.fission.name to `follow` Drive
-              -- FIXME setdata should adjust _files.username.fission.name
               User.setData userId App.Content.empty now >>= \case
                 Left err ->
                   return $ Error.openLeft err

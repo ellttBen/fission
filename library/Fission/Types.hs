@@ -305,8 +305,8 @@ instance User.Modifier Fission where
   updatePassword uID pass now =
     runDB $ User.updatePassword uID pass now
 
-  updatePublicKey uID pk algo now =
-    runDB $ User.updatePublicKey uID pk algo now
+  updatePublicKey uID pk now =
+    runDB $ User.updatePublicKey uID pk now
    
   setData userId newCID now = do
     runDB (User.setData userId newCID now) >>= \case
@@ -333,20 +333,13 @@ instance User.Modifier Fission where
 
 instance App.Creator Fission where
   create ownerId cid now = do
-    appId <- runDB $ insert App
-      { appOwnerId    = ownerId
-      , appCid        = cid
-      , appInsertedAt = now
-      , appModifiedAt = now
-      }
-
-    runDB (App.Domain.associateDefault ownerId appId now) >>= \case
+    runDB (App.create ownerId cid now) >>= \case
       Left err ->
-        return $ Error.relaxedLeft err
-
-      Right subdomain -> do
+        return $ Left err
+       
+      Right (appId, subdomain) -> do
         domainName <- App.Domain.initial
-        driveURL   <- asks liveDriveURL
+        driveURL <- asks liveDriveURL
 
         DNSLink.follow URL { domainName, subdomain = Just subdomain } driveURL <&> \case
           Left  err -> Error.openLeft err
@@ -356,31 +349,21 @@ instance Heroku.AddOn.Creator Fission where
   create uuid region now = runDB $ Heroku.AddOn.create uuid region now
 
 instance User.Creator Fission where
-  create username pk algo email now = runDB do
-    -- runDB (User.create username pk algo email now) >>= \case
-    User.create username pk algo email now >>= \case
+  create username pk email now = do
+    runDB (User.create username pk email now) >>= \case
       Left err ->
         return $ Left err
 
       Right userId -> do
         -- FIXME set USERNAME.fission.name to `follow` Drive
+        -- FIXME setdata should adjust _dnslink.files.username.fission.name
         let
           userURL  = undefined -- FIXME
           driveURL = undefined -- FIXME
          
-        DNSLink.follow userURL driveURL >>= \case
-          Left serverError -> return $ Error.openLeft serverError
-          Right _ -> return userId
-
-          -- Right () ->
-          --   User.setData userId App.Content.empty now >>= \case
-          --     Left err ->
-          --       return $ Error.openLeft err
-
-          --     Right () ->
-          --       App.createWithPlaceholder userId now <&> \case
-          --         Left err     -> Error.relaxedLeft err
-          --         Right (_, _) -> Right userId
+        DNSLink.follow userURL driveURL <&> \case
+          Left serverError -> Error.openLeft serverError
+          Right _          -> Right userId
  
   createWithHeroku herokuUUID herokuRegion username password now =
     runDB $ User.createWithHeroku herokuUUID herokuRegion username password now

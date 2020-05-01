@@ -3,6 +3,8 @@ module Fission.App.Creator.Class
   , Errors
   ) where
 
+import           Database.Esqueleto hiding ((<&>))
+
 import           Network.IPFS.CID.Types
 import           Servant
 
@@ -22,3 +24,27 @@ type Errors = OpenUnion
 
 class Monad m => Creator m where
   create :: UserId -> CID -> UTCTime -> m (Either Errors (AppId, Subdomain))
+
+instance
+  ( MonadIO m
+  , App.Domain.Initializer m
+  )
+  => Creator (Transaction m) where
+  create ownerId cid now = do
+    appId <- insert App
+      { appOwnerId    = ownerId
+      , appCid        = cid
+      , appInsertedAt = now
+      , appModifiedAt = now
+      }
+
+    App.Domain.associateDefault ownerId appId now <&> \case
+      Left  err       -> Error.relaxedLeft err
+      Right subdomain -> Right (appId, subdomain)
+
+    -- runDB (App.Domain.associateDefault ownerId appId now) >>= \case
+    --   Left err ->
+    --     return $ Error.relaxedLeft err
+
+    --   Right subdomain -> do
+    --     domainName <- App.Domain.initial
