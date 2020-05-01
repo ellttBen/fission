@@ -38,6 +38,8 @@ import           Fission.Config.Types
 import           Fission.Models
 import           Fission.Error as Error
 
+import           Fission.Ownership
+
 import           Fission.Web.Types
 import qualified Fission.Web.Error as Web.Error
 import qualified Fission.App.Creator as App
@@ -300,7 +302,6 @@ instance PublicizeServerDID Fission where
                 then ok
                 else Left $ Web.Error.toServerError status
 
-
 instance User.Modifier Fission where
   updatePassword uID pass now =
     runDB $ User.updatePassword uID pass now
@@ -331,6 +332,10 @@ instance User.Modifier Fission where
               Left err -> Left err
               Right _  -> ok
 
+instance App.Retriever Fission where
+  byId uId appId = runDB $ App.byId uId appId
+  ownedBy uId    = runDB $ App.ownedBy uId
+
 instance App.Creator Fission where
   create ownerId cid now = do
     runDB (App.create ownerId cid now) >>= \case
@@ -345,23 +350,50 @@ instance App.Creator Fission where
           Left  err -> Error.openLeft err
           Right _   -> Right (appId, subdomain)
 
+instance App.Modifier Fission where
+  updateCID userId appId newCID now =
+    App.byId userId appId >>= \case
+      Left err ->
+        return $ Error.relaxedLeft err
+
+      Right (Entity _ app) -> do
+        if isOwnedBy userId app
+          then
+            runDB (App.updateCID userId appId newCID now) >>= \case
+              Left err ->
+                return $ Left err
+               
+              Right () -> do
+                appDomains <- runDB $ App.Domain.allForApp appId
+                forM_ appDomains \(Entity _ AppDomain {..}) ->
+                  let
+                    url = URL
+                      { domainName = appDomainDomainName
+                      , subdomain  = appDomainSubdomain
+                      }
+                  in
+                    DNSLink.set url newCID
+
+                return ok
+           
+          else
+            return . Error.openLeft $ ActionNotAuthorized @App userId
+
 instance Heroku.AddOn.Creator Fission where
   create uuid region now = runDB $ Heroku.AddOn.create uuid region now
 
 instance User.Creator Fission where
-  create username pk email now = do
+  create username@(Username rawUN) pk email now = do
     runDB (User.create username pk email now) >>= \case
       Left err ->
         return $ Left err
 
       Right userId -> do
-        -- FIXME set USERNAME.fission.name to `follow` Drive
-        -- FIXME setdata should adjust _dnslink.files.username.fission.name
-        let
-          userURL  = undefined -- FIXME
-          driveURL = undefined -- FIXME
-         
-        DNSLink.follow userURL driveURL <&> \case
+        domainName <- asks baseUserDataRootDomain
+        driveURL   <- asks liveDriveURL
+        let subdomain = Just $ Subdomain rawUN
+
+        DNSLink.follow URL {..} driveURL <&> \case
           Left serverError -> Error.openLeft serverError
           Right _          -> Right userId
  

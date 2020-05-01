@@ -23,37 +23,45 @@ type Errors = OpenUnion
 class Monad m => Modifier m where
   updateCID :: UserId -> AppId -> CID -> UTCTime -> m (Either Errors ())
 
-instance MonadDNSLink m => Modifier (Transaction m) where
-  updateCID userId appId newCID now =
-    App.byId userId appId >>= \case
-      Left err ->
-        return $ Error.relaxedLeft err
+instance MonadIO m => Modifier (Transaction m) where
+  updateCID userId appId newCID now = do
+    update appId [AppCid =. newCID]
+    insert $ SetAppCIDEvent appId newCID now
+    return ok
 
-      Right (Entity _ app) -> do
-        if isOwnedBy userId app
-          then do
-            update appId [AppCid =. newCID]
-            insert $ SetAppCIDEvent appId newCID now
-            updateAssociatedDNS appId newCID
-            return ok
-          else
-            return . Error.openLeft $ ActionNotAuthorized @App userId
 
--- | Update DNS records for each registered @AppDomain@
-updateAssociatedDNS ::
-  ( MonadIO                   m
-  , MonadDNSLink (Transaction m)
-  )
-  => AppId
-  -> CID
-  -> Transaction m ()
-updateAssociatedDNS appId newCID = do
-  appDomains <- selectList [AppDomainAppId ==. appId] []
-  forM_ appDomains \(Entity _ AppDomain {..}) -> do
-    let
-      url = URL
-        { domainName = appDomainDomainName
-        , subdomain  = appDomainSubdomain
-        }
+
+-- instance MonadDNSLink m => Modifier (Transaction m) where
+--   updateCID userId appId newCID now =
+--     App.byId userId appId >>= \case
+--       Left err ->
+--         return $ Error.relaxedLeft err
+
+--       Right (Entity _ app) -> do
+--         if isOwnedBy userId app
+--           then do
+--             update appId [AppCid =. newCID]
+--             insert $ SetAppCIDEvent appId newCID now
+--             lift $ updateAssociatedDNS appId newCID
+--             return ok
+--           else
+--             return . Error.openLeft $ ActionNotAuthorized @App userId
+
+-- -- | Update DNS records for each registered @AppDomain@
+-- updateAssociatedDNS ::
+--   ( MonadIO                   m
+--   , MonadDNSLink (Transaction m)
+--   )
+--   => AppId
+--   -> CID
+--   -> Transaction m ()
+-- updateAssociatedDNS appId newCID = do
+--   appDomains <- selectList [AppDomainAppId ==. appId] []
+--   forM_ appDomains \(Entity _ AppDomain {..}) -> do
+--     let
+--       url = URL
+--         { domainName = appDomainDomainName
+--         , subdomain  = appDomainSubdomain
+--         }
  
-    DNSLink.set url newCID
+--     DNSLink.set url newCID

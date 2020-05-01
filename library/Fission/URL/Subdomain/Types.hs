@@ -13,7 +13,6 @@ import           Fission.Prelude
 -- | Type safety wrapper for subdomains
 newtype Subdomain = Subdomain { get :: Text }
   deriving          ( Eq
-                    , Generic
                     , Show
                     )
   deriving newtype  ( IsString
