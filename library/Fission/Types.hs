@@ -337,14 +337,14 @@ instance App.Retriever Fission where
   ownedBy uId    = runDB $ App.ownedBy uId
 
 instance App.Creator Fission where
-  create ownerId cid now = do
-    runDB (App.create ownerId cid now) >>= \case
+  create ownerID cid now = do
+    runDB (App.create ownerID cid now) >>= \case
       Left err ->
         return $ Left err
        
       Right (appId, subdomain) -> do
         domainName <- App.Domain.initial
-        driveURL <- asks liveDriveURL
+        driveURL   <- asks liveDriveURL
 
         DNSLink.follow URL { domainName, subdomain = Just subdomain } driveURL <&> \case
           Left  err -> Error.openLeft err

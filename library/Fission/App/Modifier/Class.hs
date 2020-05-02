@@ -8,12 +8,8 @@ import           Network.IPFS.CID.Types
 
 import           Fission.Prelude
 import           Fission.Models
-import           Fission.Ownership
-import           Fission.URL
 
-import qualified Fission.App.Retriever as App
-import           Fission.Error         as Error
-import           Fission.IPFS.DNSLink  as DNSLink
+import           Fission.Error as Error
 
 type Errors = OpenUnion
   '[ NotFound            App
@@ -24,44 +20,7 @@ class Monad m => Modifier m where
   updateCID :: UserId -> AppId -> CID -> UTCTime -> m (Either Errors ())
 
 instance MonadIO m => Modifier (Transaction m) where
-  updateCID userId appId newCID now = do
+  updateCID _ appId newCID now = do
     update appId [AppCid =. newCID]
     insert $ SetAppCIDEvent appId newCID now
     return ok
-
-
-
--- instance MonadDNSLink m => Modifier (Transaction m) where
---   updateCID userId appId newCID now =
---     App.byId userId appId >>= \case
---       Left err ->
---         return $ Error.relaxedLeft err
-
---       Right (Entity _ app) -> do
---         if isOwnedBy userId app
---           then do
---             update appId [AppCid =. newCID]
---             insert $ SetAppCIDEvent appId newCID now
---             lift $ updateAssociatedDNS appId newCID
---             return ok
---           else
---             return . Error.openLeft $ ActionNotAuthorized @App userId
-
--- -- | Update DNS records for each registered @AppDomain@
--- updateAssociatedDNS ::
---   ( MonadIO                   m
---   , MonadDNSLink (Transaction m)
---   )
---   => AppId
---   -> CID
---   -> Transaction m ()
--- updateAssociatedDNS appId newCID = do
---   appDomains <- selectList [AppDomainAppId ==. appId] []
---   forM_ appDomains \(Entity _ AppDomain {..}) -> do
---     let
---       url = URL
---         { domainName = appDomainDomainName
---         , subdomain  = appDomainSubdomain
---         }
- 
---     DNSLink.set url newCID
