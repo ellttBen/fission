@@ -68,7 +68,8 @@ up Up.Options {..} = do
   logDebug $ "Starting single IPFS add locally of " <> displayShow absPath
   IPFS.addDir ignoredFiles absPath >>= putErrOr \cid -> do
     unless dnsOnly $
-      CLI.App.update cid >>= putErrOr \_ -> noop
+      runRequestM (authClient (Proxy @App.Update) `withPayload` cid)
+        >>= putErrOr \_ -> noop
 
     CLI.DNS.update cid >>= putErrOr \_ -> noop
 

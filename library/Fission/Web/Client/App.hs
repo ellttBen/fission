@@ -11,4 +11,4 @@ import           Servant
 import qualified Fission.Web.User   as User
 import           Fission.Web.Routes (UserPrefix)
 
-type Update = AppPrefix :> User.RegisterRoute
+type Update = AppPrefix :> App.RegisterRoute

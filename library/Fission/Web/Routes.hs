@@ -30,12 +30,12 @@ type API
   :<|> DNSRoute
 
 type AppRoute
-  =  "app"
-  :> Auth.HigherOrder
+  =  AppPrefix
   :> App.API
 
 type AppPrefix
   = "app"
+  :> Auth.HigherOrder
 
 type PingRoute
   =  "ping"
