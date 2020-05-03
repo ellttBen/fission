@@ -19,7 +19,7 @@ instance ToJSON Environment where
     ]
 
 instance FromJSON Environment where
-  parseJSON = withObject "Environment" <| \obj ->
+  parseJSON = withObject "Environment" \obj ->
     Environment <$> obj .: "peers"
                 <*> obj .: "ignore"
                 <*> obj .: "build_dir"
