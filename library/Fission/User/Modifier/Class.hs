@@ -1,15 +1,24 @@
-module Fission.User.Modifier.Class (Modifier (..)) where
+module Fission.User.Modifier.Class
+  ( Modifier (..)
+  , Errors
+  ) where
 
 import           Database.Persist as Persist
 import           Network.IPFS.CID.Types
 import           Servant
 
 import           Fission.Prelude
+import           Fission.Error
 
 import           Fission.Key           as Key
 import           Fission.Models
 import           Fission.User.Password as Password
-import           Fission.IPFS.DNSLink  as DNSLink
+-- import           Fission.IPFS.DNSLink  as DNSLink
+
+type Errors = OpenUnion
+  '[ NotFound User
+   , ServerError
+   ]
 
 class Monad m => Modifier m where
   updatePassword ::
@@ -28,7 +37,7 @@ class Monad m => Modifier m where
        UserId
     -> CID
     -> UTCTime
-    -> m (Either ServerError ())
+    -> m (Either Errors ())
 
 instance MonadIO m => Modifier (Transaction m) where
   updatePassword userId password now =

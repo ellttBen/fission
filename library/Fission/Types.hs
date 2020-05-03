@@ -315,9 +315,9 @@ instance User.Modifier Fission where
         return $ Left err
        
       Right () -> do
-        runDB (Persist.get userId) >>= \case
+        runDB (User.getById userId) >>= \case
           Nothing ->
-            return $ Left err404 -- FIXME just NotFound @User
+            return . Left $ NotFound @User
            
           Just User { userUsername = Username username } -> do
             userDataDomain <- asks baseUserDataRootDomain
