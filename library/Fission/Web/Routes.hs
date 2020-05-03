@@ -34,6 +34,9 @@ type AppRoute
   :> Auth.HigherOrder
   :> App.API
 
+type AppPrefix
+  = "app"
+
 type PingRoute
   =  "ping"
   :> Ping.API

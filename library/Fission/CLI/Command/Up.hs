@@ -53,22 +53,22 @@ up ::
   , MonadLocalIPFS   m
   , MonadEnvironment m
   , MonadWebClient   m
-  , MonadTime      m
-  , MonadWebAuth   m Token
-  , MonadWebAuth   m Ed25519.SecretKey
-  , ServerDID      m
+  , MonadTime        m
+  , MonadWebAuth     m Token
+  , MonadWebAuth     m Ed25519.SecretKey
+  , ServerDID        m
   )
   => Up.Options
   -> m ()
 up Up.Options {..} = do
   ignoredFiles <- getIgnoredFiles
   toAdd        <- Prompt.checkBuildDir path
-  absPath      <- liftIO (makeAbsolute toAdd)
+  absPath      <- liftIO $ makeAbsolute toAdd
 
   logDebug $ "Starting single IPFS add locally of " <> displayShow absPath
   IPFS.addDir ignoredFiles absPath >>= putErrOr \cid -> do
     unless dnsOnly $
-      CLI.Pin.add cid >>= putErrOr \_ -> noop
+      CLI.App.update cid >>= putErrOr \_ -> noop
 
     CLI.DNS.update cid >>= putErrOr \_ -> noop
 
