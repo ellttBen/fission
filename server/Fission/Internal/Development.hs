@@ -85,7 +85,7 @@ run logFunc dbPool processCtx httpManager action =
     config = Config {..}
 
     host         = Host $ BaseUrl Https "mycoolapp.io" 443 ""
-    liveDriveURL = "drive.fission.codes"
+    liveDriveURL = URL "fission.codes" (Just "drive")
 
     herokuID       = Hku.ID       "HEROKU_ID"
     herokuPassword = Hku.Password "HEROKU_PASSWORD"
@@ -146,11 +146,10 @@ mkConfig ::
 mkConfig dbPool processCtx httpManager logFunc = Config {..}
   where
     host = Host $ BaseUrl Https "mycoolapp.io" 443 ""
+    liveDriveURL = URL "fission.codes" (Just "drive")
 
     herokuID       = Hku.ID       "HEROKU_ID"
     herokuPassword = Hku.Password "HEROKU_PASSWORD"
-
-    liveDriveURL = "drive.fission.codes"
 
     fissionDID = DID
       { publicKey = Fixture.Ed25519.pk

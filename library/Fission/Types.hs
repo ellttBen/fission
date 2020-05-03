@@ -14,8 +14,6 @@ import           Control.Monad.Catch
 import qualified Database.Persist.Sql as SQL
 import qualified Fission.App as App
 
-import Servant.Server
-
 import qualified RIO.ByteString.Lazy as Lazy
 import qualified RIO.Text            as Text
 
@@ -337,16 +335,19 @@ instance App.Retriever Fission where
   ownedBy uId    = runDB $ App.ownedBy uId
 
 instance App.Creator Fission where
-  create ownerID cid now = do
+  create ownerID cid now =
     runDB (App.create ownerID cid now) >>= \case
       Left err ->
         return $ Left err
-       
+:
       Right (appId, subdomain) -> do
+        appCID     <- App.Content.placeholder
         domainName <- App.Domain.initial
-        driveURL   <- asks liveDriveURL
+ 
+        let
+          url = URL { domainName, subdomain = Just subdomain }
 
-        DNSLink.follow URL { domainName, subdomain = Just subdomain } driveURL <&> \case
+        DNSLink.set url appCID <&> \case
           Left  err -> Error.openLeft err
           Right _   -> Right (appId, subdomain)
 
@@ -391,7 +392,9 @@ instance User.Creator Fission where
       Right userId -> do
         domainName <- asks baseUserDataRootDomain
         driveURL   <- asks liveDriveURL
-        let subdomain = Just $ Subdomain rawUN
+
+        let
+          subdomain = Just $ Subdomain rawUN
 
         DNSLink.follow URL {..} driveURL <&> \case
           Left serverError -> Error.openLeft serverError

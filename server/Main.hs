@@ -19,6 +19,7 @@ import qualified Fission.Authorization.ServerDID.Class as ServerDID
 import           Fission.Internal.App
 
 import qualified Fission.Web       as Web
+import qualified Fission.Web.Error as Web.Error
 import qualified Fission.Web.Log   as Web.Log
 import qualified Fission.Web.Types as Web
 

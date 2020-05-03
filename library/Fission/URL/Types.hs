@@ -36,7 +36,7 @@ instance FromHttpApiData URL where
       parse :: Maybe Text -> [Text] -> Either Text URL
       parse _       []           = err
       parse _       [_]          = err
-      parse acc     [dom, tld]   = Right <| URL (DomainName (dom <> "." <> tld)) (Subdomain <$> acc)
+      parse acc     [dom, tld]   = Right $ URL (DomainName (dom <> "." <> tld)) (Subdomain <$> acc)
       parse Nothing (sub : more) = parse (Just sub)        more
       parse acc     (sub : more) = parse (acc <> Just ("." <> sub)) more
 
