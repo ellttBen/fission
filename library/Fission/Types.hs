@@ -317,9 +317,9 @@ instance User.Modifier Fission where
       Right () -> do
         runDB (User.getById userId) >>= \case
           Nothing ->
-            return . Left $ NotFound @User
+            return . Error.openLeft $ NotFound @User
            
-          Just User { userUsername = Username username } -> do
+          Just (Entity _ User { userUsername = Username username }) -> do
             userDataDomain <- asks baseUserDataRootDomain
            
             let
@@ -329,7 +329,7 @@ instance User.Modifier Fission where
                 }
 
             DNSLink.set url newCID <&> \case
-              Left err -> Left err
+              Left err -> Error.openLeft err
               Right _  -> ok
 
 instance App.Retriever Fission where

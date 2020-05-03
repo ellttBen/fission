@@ -34,7 +34,9 @@ type Errors = OpenUnion
 
    , AlreadyExists HerokuAddOn
    , App.Domain.AlreadyAssociated
+  
    , User.AlreadyExists
+   , NotFound User
   
    , Username.Invalid
    , Password.FailedDigest
@@ -71,7 +73,6 @@ instance
   ( MonadIO                 m
   , App.Domain.Initializer  m
   , App.Content.Initializer m
-  , App.Creator             m
   )
   => Creator (Transaction m) where
   create username pk email now =
@@ -98,9 +99,9 @@ instance
               determineConflict username (Just pk)
 
             Just userId ->
-              User.setData userId App.Content.empty now >>= \case
+              User.setData userId App.Content.empty now >>= \case -- FIXME why no App.Creator constaint?!
                 Left err ->
-                  return $ Error.openLeft err
+                  return $ Error.relaxedLeft err
 
                 Right () ->
                   App.createWithPlaceholder userId now <&> \case

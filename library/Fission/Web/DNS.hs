@@ -25,7 +25,7 @@ type API
 -- Deprecated
 server :: (MonadLogger m, MonadDNSLink m) => Authorization -> ServerT API m
 server Authorization {about = Entity _ User {userUsername = Username rawUN}} cid = do
-  void . Web.Err.ensureM =<< DNSLink.set url cid
+  void . Web.Err.ensureM $ DNSLink.set url cid
   return . DomainName $ rawUN <> "fission.name"
   where
     url = URL
