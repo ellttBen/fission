@@ -129,10 +129,11 @@ instance
   , IsMember UpdateRoute53 effs
   )
   => MonadRoute53 (Mock effs) where
-  update r d t = do
+  update r url ts = do
     Effect.log UpdateRoute53
     runner <- asks updateRoute53
-    return $ runner r d t
+    return undefined -- FIXME
+    -- return $ runner r url ts
 
 instance
   ( IsMember UpdateRoute53 effs
@@ -143,7 +144,8 @@ instance
   set URL {..} c = do
     Effect.log SetDNSLink
     runner <- asks setDNSLink
-    return $ runner domainName subdomain c
+    return undefined
+    -- FIXME return $ runner domainName subdomain c
 
   _toSet `follow` _toFollow = do
     undefined -- FIXME

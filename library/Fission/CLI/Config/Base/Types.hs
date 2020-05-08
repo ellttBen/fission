@@ -90,7 +90,7 @@ instance ServerDID FissionBase where
       Nothing -> do
         rs      <- liftIO $ DNS.makeResolvSeed DNS.defaultResolvConf
         baseURL <- asks fissionURL
-        let url = BS8.pack $ "_did." <> baseUrlHost baseURL
+        let url = BS8.pack $ "_did." <> baseUrlHost baseURL -- FIXME use new Semigroup
 
         logDebugN $ "Checking TXT " <> decodeUtf8Lenient url
 

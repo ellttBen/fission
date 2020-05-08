@@ -59,6 +59,7 @@ import           Fission.Web.Handler
 
 import           Fission.User.DID.Types
 import qualified Fission.User          as User
+import           Fission.User.Creator.Class
 
 import           Fission.Web.Auth.Token.Basic.Class
 import           Fission.Web.Auth.Token.JWT.Resolver as JWT
@@ -104,14 +105,40 @@ instance MonadAWS Fission where
     runResourceT $ runAWS env awsAction
 
 instance MonadRoute53 Fission where
-  update recordType (URL.DomainName domain) content = do
+  update recordType url contents = do
     AWS.Route53MockEnabled mockRoute53 <- asks awsRoute53MockEnabled
 
     if mockRoute53
-       then changeRecordMock
-       else changeRecord'
+      then
+         changeRecordMock
+        
+      else do
+        logDebug $ "Updating DNS record at: " <> displayShow url
+ 
+        req <- createChangeRequest
+
+        AWS.within NorthVirginia do
+          res <- send req
+          return $ validate res
 
     where
+      -- | Create the AWS change request for Route53
+      createChangeRequest = do
+        ZoneID zoneId <- asks awsZoneID
+       
+        let
+          urlTxt = textDisplay url
+          toSet  = addValues (resourceRecordSet urlTxt recordType) contents
+          batch  = changeBatch . pure $ change Upsert toSet
+
+        return $ changeResourceRecordSets (ResourceId zoneId) batch
+
+      addValues :: ResourceRecordSet -> NonEmpty Text -> ResourceRecordSet
+      addValues recordSet values =
+        recordSet
+          |> rrsTTL ?~ 10
+          |> rrsResourceRecords ?~ (resourceRecord <$> values)
+
       changeRecordMock = do
           mockTime <- currentTime
 
@@ -120,9 +147,9 @@ instance MonadRoute53 Fission where
               [ "MOCK: Updating DNS "
               , show recordType
               , " record at: "
-              , show domain
+              , Text.unpack (textDisplay url)
               , " with "
-              , show content
+              , show contents
               ]
 
             mockId             = "test123"
@@ -132,67 +159,46 @@ instance MonadRoute53 Fission where
           logDebug mockMessage
           return (Right mockRecordResponse)
 
-      changeRecord' = do
-        logDebug $ "Updating DNS record at: " <> displayShow domain
-
-        req <- createChangeRequest
-
-        AWS.within NorthVirginia do
-          res <- send req
-          return $ validate res
-
-      -- | Create the AWS change request for Route53
-      createChangeRequest = do
-        ZoneID zoneId <- asks awsZoneID
-        content
-          |> addValue (resourceRecordSet domain recordType)
-          |> change Upsert
-          |> return
-          |> changeBatch
-          |> changeResourceRecordSets (ResourceId zoneId)
-          |> return
-
-      addValue :: ResourceRecordSet -> Text -> ResourceRecordSet
-      addValue recordSet value =
-        recordSet
-          |> rrsTTL ?~ 10
-          |> rrsResourceRecords ?~ pure (resourceRecord value)
-
 instance MonadDNSLink Fission where
-  set URL {..} IPFS.CID {unaddress = hash} = do
+  set url@URL {..} (IPFS.CID hash) = do
     IPFS.Gateway gateway <- asks ipfsGateway
 
     let
-      baseURL    = URL.normalizePrefix domainName subdomain
-      sub        = maybe "" (\(URL.Subdomain txt) -> "." <> txt) subdomain
-      dnsLinkURL = URL.prefix baseURL (URL.Subdomain $ "_dnslink" <> sub)
+      dnsLinkURL = URL.prefix' (URL.Subdomain "_dnslink") url
       dnsLink    = "dnslink=/ipfs/" <> hash
 
-    AWS.update Cname baseURL gateway >>= \case
+    AWS.update Cname url (pure gateway) >>= \case
       Left err ->
         return $ Left err
 
       Right _ ->
-        AWS.update Txt dnsLinkURL ("\"" <> dnsLink <> "\"")
-          <&> \_ -> Right baseURL
+        AWS.update Txt dnsLinkURL (pure $ "\"" <> dnsLink <> "\"") <&> \case
+          Left err -> Left  err
+          Right _  -> Right url
 
-  follow URL {..} URL { domainName = driveDomain, subdomain = driveSub } = do
+  follow url@URL {..} URL { domainName = driveDomain, subdomain = driveSub } = do
     IPFS.Gateway gateway <- asks ipfsGateway
 
     let
-      baseURL    = URL.normalizePrefix domainName subdomain
-      sub        = maybe "" (\(URL.Subdomain txt) -> "." <> txt) subdomain
-      dnsLinkURL = URL.prefix baseURL (URL.Subdomain $ "_dnslink" <> sub)
+      -- baseURL    = URL.normalizePrefix domainName subdomain
+      -- sub        = maybe "" (\(URL.Subdomain txt) -> "." <> txt) subdomain
+      -- dnsLinkURL = URL.prefix baseURL (URL.Subdomain $ "_dnslink" <> sub)
+      dnsLinkURL = URL
+        { domainName
+        , subdomain = Just (URL.Subdomain "_dnslink") <> subdomain
+        }
    
       URL.DomainName driveURL = URL.normalizePrefix driveDomain driveSub
       dnsLink                 = "dnslink=/ipns/" <> driveURL
 
-    AWS.update Cname baseURL gateway >>= \case
+    AWS.update Cname url (pure gateway) >>= \case
       Left err ->
         return $ Left err
 
       Right _ ->
-        AWS.update Txt dnsLinkURL ("\"" <> dnsLink <> "\"") <&> \_ -> Right ()
+        AWS.update Txt dnsLinkURL (pure $ "\"" <> dnsLink <> "\"") <&> \case
+          Left err -> Left err
+          Right _  -> Right ()
 
 instance MonadLinkedIPFS Fission where
   getLinkedPeers = pure <$> asks ipfsRemotePeer
@@ -272,8 +278,8 @@ instance PublicizeServerDID Fission where
     did       <- getServerDID
 
     let
-      ourDomain      = URL.DomainName . Text.pack $ baseUrlHost host
-      txtRecordURL   = URL.prefix ourDomain $ URL.Subdomain "_did"
+      ourURL         = URL (URL.DomainName . Text.pack $ baseUrlHost host) Nothing
+      txtRecordURL   = URL.prefix' (URL.Subdomain "_did") ourURL
       txtRecordValue = decodeUtf8Lenient . Lazy.toStrict $ JSON.encode did
 
     if mockRoute53
@@ -288,7 +294,7 @@ instance PublicizeServerDID Fission where
         return ok
        
       else
-        AWS.update Txt txtRecordURL txtRecordValue <&> \case
+        AWS.update Txt txtRecordURL (pure txtRecordValue) <&> \case
           Left err ->
             Left err
 
@@ -300,13 +306,80 @@ instance PublicizeServerDID Fission where
                 then ok
                 else Left $ Web.Error.toServerError status
 
+instance User.Creator Fission where
+  create username@(Username rawUN) pk email now = do
+    runDB (User.create username pk email now) >>= \case
+      Left err ->
+        return $ Left err
+
+      Right userId -> do
+        domainName <- asks baseUserDataRootDomain
+
+        let
+          subdomain = Just $ Subdomain rawUN
+          url = URL {domainName, subdomain = Just (Subdomain "_did") <> subdomain}
+          did = textDisplay (DID pk Key) -- FIXME break up anythunbg > 255 chars
+
+        -- FIXME also do this when updatng the DID ... actually mayeb
+        -- just move this tsuff there and call that function
+
+        AWS.update Txt url (pure did) >>= \case
+          Left serverErr ->
+            return $ Error.openLeft serverErr
+
+          Right _ -> do
+            driveURL <- asks liveDriveURL
+
+            DNSLink.follow URL {..} driveURL <&> \case
+              Left serverError -> Error.openLeft serverError
+              Right _          -> Right userId
+
+  createWithHeroku herokuUUID herokuRegion username password now =
+    runDB $ User.createWithHeroku herokuUUID herokuRegion username password now
+
+  createWithPassword username password email now =
+    runDB (User.createWithPassword username password email now) >>= \case
+      Left err ->
+        return $ Left err
+
+      Right userId ->
+        App.createWithPlaceholder userId now <&> \case
+          Left err -> Error.relaxedLeft err
+          Right _  -> Right userId
+
+
 instance User.Modifier Fission where
   updatePassword uID pass now =
     runDB $ User.updatePassword uID pass now
 
   updatePublicKey uID pk now =
-    runDB $ User.updatePublicKey uID pk now
-   
+    runDB (User.updatePublicKey uID pk now) >>= \case
+      Left err ->
+        return $ Left err
+
+      Right _ -> do
+        runDB (User.getById uID) >>= \case
+          Nothing -> do
+            undefined
+
+          Just (Entity _ User { userUsername = Username rawUN }) -> do
+            domainName <- asks baseUserDataRootDomain
+
+            let
+              subdomain = Just $ Subdomain rawUN
+              url = URL {domainName, subdomain = Just (Subdomain "_did") <> subdomain}
+              did = textDisplay (DID pk Key) -- FIXME break up anythunbg > 255 chars
+
+            -- FIXME also do this when updatng the DID ... actually mayeb
+            -- just move this tsuff there and call that function
+
+            AWS.update Txt url (pure did) >>= \case
+              Left err ->
+                return $ Error.openLeft err
+
+              Right _resp -> -- FIXME In the middle of movin this stuf here from User.Creator
+               
+
   setData userId newCID now = do
     runDB (User.setData userId newCID now) >>= \case
       Left err ->
@@ -339,7 +412,7 @@ instance App.Creator Fission where
     runDB (App.create ownerID cid now) >>= \case
       Left err ->
         return $ Left err
-:
+
       Right (appId, subdomain) -> do
         appCID     <- App.Content.placeholder
         domainName <- App.Domain.initial
@@ -382,34 +455,4 @@ instance App.Modifier Fission where
 
 instance Heroku.AddOn.Creator Fission where
   create uuid region now = runDB $ Heroku.AddOn.create uuid region now
-
-instance User.Creator Fission where
-  create username@(Username rawUN) pk email now = do
-    runDB (User.create username pk email now) >>= \case
-      Left err ->
-        return $ Left err
-
-      Right userId -> do
-        domainName <- asks baseUserDataRootDomain
-        driveURL   <- asks liveDriveURL
-
-        let
-          subdomain = Just $ Subdomain rawUN
-
-        DNSLink.follow URL {..} driveURL <&> \case
-          Left serverError -> Error.openLeft serverError
-          Right _          -> Right userId
- 
-  createWithHeroku herokuUUID herokuRegion username password now =
-    runDB $ User.createWithHeroku herokuUUID herokuRegion username password now
-
-  createWithPassword username password email now =
-    runDB (User.createWithPassword username password email now) >>= \case
-      Left err ->
-        return $ Left err
-
-      Right userId ->
-        App.createWithPlaceholder userId now <&> \case
-          Left err -> Error.relaxedLeft err
-          Right _  -> Right userId
 

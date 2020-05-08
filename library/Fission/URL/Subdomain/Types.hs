@@ -15,9 +15,13 @@ newtype Subdomain = Subdomain { get :: Text }
   deriving          ( Eq
                     , Show
                     )
-  deriving newtype  ( IsString
-                    , Display
-                    )
+  deriving newtype  ( IsString )
+
+instance Display Subdomain where
+  textDisplay (Subdomain txt) = txt
+
+instance Semigroup Subdomain where
+  Subdomain subA <> Subdomain subB = Subdomain (subA <> "." <> subB)
 
 instance ToJSON Subdomain where
   toJSON (Subdomain sub) = String sub

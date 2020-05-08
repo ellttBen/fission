@@ -52,10 +52,7 @@ defaultConfig = Config
   , setDNSLink      = \_ _ _ -> Right $ DomainName "example.com"
   , getBaseDomain   = DomainName "example.com"
   , updateRoute53   = \_ _ _ ->
-      agesAgo
-        |> changeInfo "ciId" Insync
-        |> changeResourceRecordSetsResponse 200
-        |> Right
+      Right . changeResourceRecordSetsResponse 200 $ changeInfo "ciId" Insync agesAgo
   }
 
 authZ :: Monad m => m Authorization

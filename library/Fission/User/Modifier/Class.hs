@@ -31,7 +31,7 @@ class Monad m => Modifier m where
        UserId
     -> Key.Public
     -> UTCTime
-    -> m Key.Public
+    -> m (Either ServerError Key.Public)
    
   setData ::
        UserId

@@ -9,6 +9,8 @@ import Fission.Prelude
 import Fission.URL.Subdomain.Types
 import Fission.URL.DomainName.Types
 
+-- FIXME probably can now just replace with the Display URL instance
+
 {-| Prefix a domain named with an optional subdomain.
 -}
 normalizePrefix :: DomainName -> Maybe Subdomain -> DomainName
