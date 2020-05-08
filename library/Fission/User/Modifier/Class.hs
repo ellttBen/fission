@@ -5,7 +5,7 @@ module Fission.User.Modifier.Class
 
 import           Database.Persist as Persist
 import           Network.IPFS.CID.Types
-import           Servant
+import           Servant.Server
 
 import           Fission.Prelude
 import           Fission.Error
@@ -31,7 +31,7 @@ class Monad m => Modifier m where
        UserId
     -> Key.Public
     -> UTCTime
-    -> m (Either ServerError Key.Public)
+    -> m (Either Errors Key.Public)
    
   setData ::
        UserId
@@ -59,7 +59,7 @@ instance MonadIO m => Modifier (Transaction m) where
       , UserModifiedAt =. now
       ]
 
-    return pk
+    return $ Right pk
 
   setData userId newCID now = do
     update userId

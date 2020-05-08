@@ -9,6 +9,7 @@ module Fission.Web.Routes
   , PingRoute
   , DNSRoute
   , AppRoute
+  , AppPrefix
   ) where
 
 import           Servant

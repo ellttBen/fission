@@ -307,28 +307,21 @@ instance PublicizeServerDID Fission where
                 else Left $ Web.Error.toServerError status
 
 instance User.Creator Fission where
-  create username@(Username rawUN) pk email now = do
+  create username@(Username rawUN) pk email now =
     runDB (User.create username pk email now) >>= \case
       Left err ->
         return $ Left err
 
-      Right userId -> do
-        domainName <- asks baseUserDataRootDomain
-
-        let
-          subdomain = Just $ Subdomain rawUN
-          url = URL {domainName, subdomain = Just (Subdomain "_did") <> subdomain}
-          did = textDisplay (DID pk Key) -- FIXME break up anythunbg > 255 chars
-
-        -- FIXME also do this when updatng the DID ... actually mayeb
-        -- just move this tsuff there and call that function
-
-        AWS.update Txt url (pure did) >>= \case
-          Left serverErr ->
-            return $ Error.openLeft serverErr
+      Right userId ->
+        User.updatePublicKey userId pk now >>= \case
+          Left err ->
+            return $ Error.relaxedLeft err
 
           Right _ -> do
-            driveURL <- asks liveDriveURL
+            domainName <- asks baseUserDataRootDomain
+            driveURL   <- asks liveDriveURL
+
+            let subdomain = Just $ Subdomain rawUN
 
             DNSLink.follow URL {..} driveURL <&> \case
               Left serverError -> Error.openLeft serverError
@@ -347,7 +340,6 @@ instance User.Creator Fission where
           Left err -> Error.relaxedLeft err
           Right _  -> Right userId
 
-
 instance User.Modifier Fission where
   updatePassword uID pass now =
     runDB $ User.updatePassword uID pass now
@@ -359,8 +351,8 @@ instance User.Modifier Fission where
 
       Right _ -> do
         runDB (User.getById uID) >>= \case
-          Nothing -> do
-            undefined
+          Nothing -> 
+            return . Error.openLeft $ NotFound @User
 
           Just (Entity _ User { userUsername = Username rawUN }) -> do
             domainName <- asks baseUserDataRootDomain
@@ -370,15 +362,9 @@ instance User.Modifier Fission where
               url = URL {domainName, subdomain = Just (Subdomain "_did") <> subdomain}
               did = textDisplay (DID pk Key) -- FIXME break up anythunbg > 255 chars
 
-            -- FIXME also do this when updatng the DID ... actually mayeb
-            -- just move this tsuff there and call that function
-
-            AWS.update Txt url (pure did) >>= \case
-              Left err ->
-                return $ Error.openLeft err
-
-              Right _resp -> -- FIXME In the middle of movin this stuf here from User.Creator
-               
+            AWS.update Txt url (pure did) <&> \case
+              Left  serverErr -> Error.openLeft serverErr
+              Right _         -> Right pk
 
   setData userId newCID now = do
     runDB (User.setData userId newCID now) >>= \case
