@@ -27,12 +27,13 @@ type API
 
 server ::
   ( App.Domain.Initializer    m
+  , App.CRUD                  m
+  , App.Content.Initializer   m
   , MonadTime                 m
   , MonadLogger               m
   , MonadDNSLink              m
   , MonadDB                 t m
   , App.CRUD                t
-  , App.Content.Initializer t
   , App.Domain.Retriever    t
   )
   => Authorization

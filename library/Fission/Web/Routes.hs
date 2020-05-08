@@ -32,11 +32,11 @@ type API
 
 type AppRoute
   =  AppPrefix
+  :> Auth.HigherOrder
   :> App.API
 
 type AppPrefix
   = "app"
-  :> Auth.HigherOrder
 
 type PingRoute
   =  "ping"

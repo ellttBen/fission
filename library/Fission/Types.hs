@@ -15,6 +15,7 @@ import qualified Database.Persist.Sql as SQL
 import qualified Fission.App as App
 
 import qualified RIO.ByteString.Lazy as Lazy
+import           RIO.NonEmpty        as NonEmpty
 import qualified RIO.Text            as Text
 
 import qualified Fission.Platform.Heroku.AddOn.Creator as Heroku.AddOn
@@ -35,8 +36,6 @@ import           Fission.Prelude
 import           Fission.Config.Types
 import           Fission.Models
 import           Fission.Error as Error
-
-import           Fission.Ownership
 
 import           Fission.Web.Types
 import qualified Fission.Web.Error as Web.Error
@@ -359,12 +358,17 @@ instance User.Modifier Fission where
 
             let
               subdomain = Just $ Subdomain rawUN
-              url = URL {domainName, subdomain = Just (Subdomain "_did") <> subdomain}
-              did = textDisplay (DID pk Key) -- FIXME break up anythunbg > 255 chars
+              url       = URL {domainName, subdomain = Just (Subdomain "_did") <> subdomain}
+              did       = textDisplay (DID pk Key)
+              (_, didSegments) = Text.foldr splitter (0, ("" :| [])) did -- FIXME Needs testing. Is reversed?
 
-            AWS.update Txt url (pure did) <&> \case
+            AWS.update Txt url didSegments <&> \case
               Left  serverErr -> Error.openLeft serverErr
               Right _         -> Right pk
+    where
+      splitter :: Char -> (Natural, NonEmpty Text) -> (Natural, NonEmpty Text)
+      splitter chr (255, txtList)       = splitter chr (0, "" `cons` txtList)
+      splitter chr (len, (txt :| more)) = (len + 1, (Text.cons chr txt) :| more)
 
   setData userId newCID now = do
     runDB (User.setData userId newCID now) >>= \case
@@ -411,33 +415,16 @@ instance App.Creator Fission where
           Right _   -> Right (appId, subdomain)
 
 instance App.Modifier Fission where
-  updateCID userId appId newCID now =
-    App.byId userId appId >>= \case
+  updateCID userId url newCID now =
+    runDB (App.updateCID userId url newCID now) >>= \case
       Left err ->
-        return $ Error.relaxedLeft err
+        return $ Left err
 
-      Right (Entity _ app) -> do
-        if isOwnedBy userId app
-          then
-            runDB (App.updateCID userId appId newCID now) >>= \case
-              Left err ->
-                return $ Left err
-               
-              Right () -> do
-                appDomains <- runDB $ App.Domain.allForApp appId
-                forM_ appDomains \(Entity _ AppDomain {..}) ->
-                  let
-                    url = URL
-                      { domainName = appDomainDomainName
-                      , subdomain  = appDomainSubdomain
-                      }
-                  in
-                    DNSLink.set url newCID
-
-                return ok
-           
-          else
-            return . Error.openLeft $ ActionNotAuthorized @App userId
+      Right appId -> do
+        appDomains <- runDB $ App.Domain.allForApp appId
+        forM_ appDomains \(Entity _ AppDomain {..}) ->
+          DNSLink.set (URL appDomainDomainName appDomainSubdomain) newCID
+        return $ Right appId
 
 instance Heroku.AddOn.Creator Fission where
   create uuid region now = runDB $ Heroku.AddOn.create uuid region now

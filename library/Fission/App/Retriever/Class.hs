@@ -1,6 +1,6 @@
 module Fission.App.Retriever.Class (Retriever (..)) where
 
-import           Database.Esqueleto
+import           Database.Esqueleto hiding ((<&>))
 
 import           Fission.Prelude hiding (on)
 import           Fission.Models
@@ -19,18 +19,16 @@ class Monad m => Retriever m where
 
 instance MonadIO m => Retriever (Transaction m) where
   byId userId appId =
-    appId
-      |> getEntity
-      |> fmap \case
-        Nothing  ->
-          openLeft <| NotFound @App
+    getEntity appId <&> \case
+      Nothing  ->
+        openLeft $ NotFound @App
 
-        Just app ->
-          if isOwnedBy userId app
-            then Right app
-            else openLeft <| ActionNotAuthorized @App userId
+      Just app ->
+        if isOwnedBy userId app
+          then Right app
+          else openLeft $ ActionNotAuthorized @App userId
 
-  ownedBy userId = do
-    select <| from \app -> do
+  ownedBy userId =
+    select $ from \app -> do
       where_ (app ^. AppOwnerId ==. val userId)
       return app
