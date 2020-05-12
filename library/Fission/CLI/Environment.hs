@@ -9,14 +9,16 @@ module Fission.CLI.Environment
   , module Fission.CLI.Environment.Class
   ) where
 
-import           Fission.Prelude
+import           Data.List.NonEmpty  as NonEmpty hiding (init, (<|))
 
 import           RIO.Directory
 import           RIO.FilePath
 
+import qualified Network.IPFS.Types as IPFS
 import qualified System.FilePath.Glob as Glob
 import qualified System.Console.ANSI as ANSI
-import           Data.List.NonEmpty  as NonEmpty hiding (init, (<|))
+
+import           Fission.Prelude
 
 import           Fission.Web.Client
 import           Fission.Web.Client.Peers as Peers
@@ -26,13 +28,11 @@ import qualified Fission.CLI.Display.Error   as CLI.Error
 
 import           Fission.CLI.Environment.Class
 import           Fission.CLI.Environment.Types
-import           Fission.CLI.Environment.Partial.Types as Env
-import qualified Fission.CLI.Environment.Partial as Env.Partial
-import           Fission.CLI.Environment.Partial (globalEnv)
+
+import           Fission.CLI.Environment.Override hiding (get)
+import qualified Fission.CLI.Environment.Override as Override
 
 import qualified Fission.Internal.UTF8 as UTF8
-
-import qualified Network.IPFS.Types as IPFS
 
 -- | Initialize the Environment file
 init ::
@@ -42,41 +42,41 @@ init ::
   )
   => m ()
 init = do
-  logDebugN "Initializing config file"
-  path <- globalEnv
+  logDebug @Text "Initializing config file"
 
   Peers.getPeers >>= \case
     Left err ->
       CLI.Error.put err "Peer retrieval failed"
 
-    Right peers -> do
+    Right nonEmptyPeers -> do
       let
-        env = Env.Partial
+        env = Override
           { maybeUserAuth = Nothing
-          , maybePeers = Just peers
-          , maybeIgnored = Just ignoreDefault
+          , peers         = NonEmpty.toList nonEmptyPeers
+          , maybeIgnored  = Just ignoreDefault
           , maybeBuildDir = Nothing
           }
 
-      liftIO $ Env.Partial.write path env
+      path <- globalEnv
+      liftIO $ Override.write path env
       CLI.Success.putOk "Logged in"
 
 -- | Gets hierarchical environment by recursing through file system
 get :: MonadIO m => m Environment
 get = do
-  partial <- Env.Partial.get
-  return $ Env.Partial.toFull partial
+  override <- Override.get
+  return $ Override.toFull override
 
 -- | Writes env to path, overwriting if necessary
 write :: MonadIO m => FilePath -> Environment -> m ()
-write path env = Env.Partial.write path $ Env.Partial.fromFull env
+write path env = Override.write path $ Override.fromFull env
 
 -- | Get the path to the Environment file, local or global
 getPath :: MonadIO m => Bool -> m FilePath
 getPath ofLocal =
   if ofLocal
-  then  getCurrentDirectory >>= \dir -> return $ dir </> ".fission.yaml"
-  else globalEnv
+    then getCurrentDirectory >>= \dir -> return $ dir </> ".fission.yaml"
+    else globalEnv
 
 -- | Create a could not read message for the terminal
 couldNotRead :: MonadIO m => m ()
@@ -104,24 +104,22 @@ getOrRetrievePeer ::
   )
   => Environment
   -> m (Maybe IPFS.Peer)
-getOrRetrievePeer config =
-  case peers config of
-    Just prs -> do
-      logDebugN "Retrieved Peer from .fission.yaml"
-      return . Just $ head prs
+getOrRetrievePeer Environment {peers = (peer : _)} = do
+  logDebug @Text "Retrieved Peer from .fission.yaml"
+  return $ Just peer
+ 
+getOrRetrievePeer config@Environment {peers = []} =
+  Peers.getPeers >>= \case
+    Left err -> do
+      logError $ displayShow err
+      logDebug @Text "Unable to retrieve peers from the network"
+      return Nothing
 
-    Nothing ->
-      Peers.getPeers >>= \case
-        Left err -> do
-          logError $ displayShow err
-          logDebugN "Unable to retrieve peers from the network"
-          return Nothing
-
-        Right peers -> do
-          logDebugN "Retrieved Peer from API"
-          path <- globalEnv
-          write path config { peers = Just peers }
-          return . Just $ head peers
+    Right nonEmptyPeers -> do
+      logDebug @Text "Retrieved Peer from API"
+      path <- globalEnv
+      Override.writeMerge path $ mempty { peers = NonEmpty.toList nonEmptyPeers }
+      return . Just $ NonEmpty.head nonEmptyPeers
 
 ignoreDefault :: IPFS.Ignored
 ignoreDefault =

@@ -44,6 +44,8 @@ type API = Web.Swagger.API :<|> Web.API
 
 app ::
   ( App.Domain.Initializer    m
+  , App.Content.Initializer   m
+  , App.CRUD                  m
   , MonadReflectiveServer     m
   , MonadLinkedIPFS           m
   , MonadRemoteIPFS           m
@@ -58,7 +60,6 @@ app ::
   , LoosePin.CRUD           t
   , User.CRUD               t
   , App.CRUD                t
-  , App.Content.Initializer t
   , App.Domain.Retriever    t
   )
   => (forall a . m a -> Handler a)
@@ -76,6 +77,8 @@ app handlerNT authChecks appHost = do
 -- | Web handlers for the 'API'
 server ::
   ( App.Domain.Initializer    m
+  , App.Content.Initializer   m
+  , App.CRUD                  m
   , MonadReflectiveServer     m
   , MonadLinkedIPFS           m
   , MonadRemoteIPFS           m
@@ -90,7 +93,6 @@ server ::
   , LoosePin.CRUD           t
   , User.CRUD               t
   , App.CRUD                t
-  , App.Content.Initializer t
   , App.Domain.Retriever    t
   )
   => Web.Host
@@ -100,6 +102,8 @@ server appHost = Web.Swagger.server fromHandler appHost
 
 bizServer ::
   ( App.Domain.Initializer    m
+  , App.Content.Initializer   m
+  , App.CRUD                  m
   , MonadReflectiveServer     m
   , MonadLinkedIPFS           m
   , MonadRemoteIPFS           m
@@ -114,7 +118,6 @@ bizServer ::
   , LoosePin.CRUD           t
   , User.CRUD               t
   , App.CRUD                t
-  , App.Content.Initializer t
   , App.Domain.Retriever    t
   )
   => ServerT Web.API m

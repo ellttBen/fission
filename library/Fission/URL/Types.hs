@@ -27,6 +27,9 @@ instance Display URL where
   display (URL domain Nothing)    = display domain
   display (URL domain (Just sub)) = display sub <> "." <> display domain
 
+instance ToHttpApiData URL where
+  toUrlPiece = textDisplay
+
 instance FromHttpApiData URL where
   parseUrlPiece txt =
     if any Text.null tokens

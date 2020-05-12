@@ -31,7 +31,7 @@ authClient ::
   , HasClient ClientM api
   , Client    ClientM api ~ (AuthenticatedRequest a -> f b)
   )
-  => Proxy api
+  => Proxy api -- FIXME remove this comment, but just a random thought: make a uniary operator alias for Proxy
   -> m (f b)
 authClient pxy = do
   auth    <- getAuth

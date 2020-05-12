@@ -34,6 +34,7 @@ import qualified Fission.CLI.Display.Error   as CLI.Error
 
 import Database.Persist.Sql
 import Fission.URL.Types
+import Fission.App.URL.Class
 
 -- | The command to attach to the CLI tree
 cmd ::
@@ -42,10 +43,11 @@ cmd ::
   , MonadLocalIPFS   m
   , MonadEnvironment m
   , MonadWebClient   m
-  , MonadTime      m
-  , MonadWebAuth   m Token
-  , MonadWebAuth   m Ed25519.SecretKey
-  , ServerDID      m
+  , MonadTime        m
+  , MonadWebAuth     m Token
+  , MonadWebAuth     m Ed25519.SecretKey
+  , HasAppURL        m
+  , ServerDID        m
   )
   => Command m Up.Options ()
 cmd = Command
@@ -65,20 +67,22 @@ up ::
   , MonadTime        m
   , MonadWebAuth     m Token
   , MonadWebAuth     m Ed25519.SecretKey
+  , HasAppURL        m
   , ServerDID        m
   )
-  => URL
-  -> Up.Options
+  -- => URL
+  => Up.Options
   -> m ()
-up url Up.Options {..} = do
+up Up.Options {..} = do
   ignoredFiles <- getIgnoredFiles
   toAdd        <- Prompt.checkBuildDir path
   absPath      <- liftIO $ makeAbsolute toAdd
+  appURL       <- getAppURL
 
   logDebug $ "Starting single IPFS add locally of " <> displayShow absPath
   IPFS.addDir ignoredFiles absPath >>= putErrOr \cid -> do
     unless dnsOnly $
-      sendRequestM (authClient (Proxy @App.Update) `withPayload` url `withPayload` cid) >>= \case
+      sendRequestM (authClient (Proxy @App.Update) `withPayload` appURL `withPayload` cid) >>= \case
         Left err -> CLI.Error.put err "Server unable to sync data"
         Right _  -> return ()
 
@@ -100,3 +104,5 @@ parseOptions = do
     ]
 
   return Up.Options {..}
+
+-- FIXME when updating, most should app's DNSLinks should follow, not set

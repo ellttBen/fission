@@ -79,7 +79,8 @@ liftConfig BaseConfig {..} = do
               let
                 ignoredFiles = Environment.ignored config
                 ucanLink = Nothing
-             
+                appURL = undefined -- FIXME
+
                 cliDID = DID
                   { publicKey = Key.Ed25519PublicKey $ Ed25519.toPublic secretKey
                   , method    = Key
